@@ -20,56 +20,66 @@ def manual_training():
     print(f"Loaded {len(dataset)} examples")
 
     # Load model and tokenizer
-    model_name = "meta-llama/Llama-3.2-3B-Instruct"
+    model_name = "meta-llama/Llama-3.1-8B-Instruct"
     print(f"Loading {model_name}...")
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(model_name)
-
-    # Move to GPU if available
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
-    print(f"Using device: {device}")
+    print(f"Spreading model across {torch.cuda.device_count()} GPUs")
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        device_map="auto",  # Automatically spread across GPUs
+        # torch_dtype=torch.float16  # Use half precision to save memory
+    )
 
     # Setup training
     model.train()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-6)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-7)
 
     print("Starting training loop...")
+
+
 
     total_loss = 0
     num_steps = 0
 
     # Training loop
-    for epoch in range(1):  # 1 epoch
-        print(f"Epoch {epoch + 1}")
+    batch_size = 4  # Process 4 examples at once across GPUs.
+    print(f"Dataset length: {len(dataset)}")
+    print(f"Batch size: {batch_size}")
+    for epoch in range(20):
+        for i in range(0, len(dataset), batch_size):
+            print(f"Processing batch starting at index {i}")
+            batch_examples = [dataset[j] for j in range(i, min(i + batch_size, len(dataset)))]
 
-        for i, example in enumerate(tqdm(dataset, desc="Training")):
-            # Prepare inputs
-            input_ids = torch.tensor([example['input_ids']], dtype=torch.long).to(device)
-            attention_mask = torch.tensor([example['attention_mask']], dtype=torch.long).to(device)
-            labels = torch.tensor([example['input_ids']], dtype=torch.long).to(device)  # For causal LM
+            # Prepare batch
+            input_ids = [torch.tensor(ex['input_ids']) for ex in batch_examples]
+            attention_masks = [torch.tensor(ex['attention_mask']) for ex in batch_examples]
 
-            # Forward pass
+            # Pad to same length
+            max_len = max(len(seq) for seq in input_ids)
+            input_ids = [torch.cat([seq, torch.zeros(max_len - len(seq), dtype=torch.long)]) for seq in input_ids]
+            attention_masks = [torch.cat([seq, torch.zeros(max_len - len(seq), dtype=torch.long)]) for seq in
+                               attention_masks]
+
+            input_ids = torch.stack(input_ids).to('cuda:0')  # Send to first GPU
+            attention_masks = torch.stack(attention_masks).to('cuda:0')
+
             optimizer.zero_grad()
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-            loss = outputs.loss
+            outputs = model(input_ids=input_ids, attention_mask=attention_masks, labels=input_ids)
+            loss = outputs.loss.mean()
+            print(f"Raw loss: {loss.item()}")
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-            # Backward pass
             loss.backward()
             optimizer.step()
 
-            # Track progress
-            total_loss += loss.item()
+            if (i // batch_size + 1) % 4 == 0:
+                print(f"Batch {i // batch_size + 1}: Loss = {loss.item():.4f}")
             num_steps += 1
-
-            # Log progress
-            if (i + 1) % 10 == 0:
-                avg_loss = total_loss / num_steps
-                print(f"Step {i + 1}/{len(dataset)}: Loss = {loss.item():.4f}, Avg Loss = {avg_loss:.4f}")
+    print(f"Total steps completed: {num_steps}")
 
     # Save model
     output_dir = "./manual_model"
@@ -78,8 +88,6 @@ def manual_training():
     print(f"Saving model to {output_dir}...")
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
-
-    print(f"✓ Training completed! Final average loss: {total_loss / num_steps:.4f}")
     print(f"✓ Model saved to {output_dir}")
 
     return True

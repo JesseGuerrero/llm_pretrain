@@ -43,8 +43,8 @@ def load_model(model_path="./manual_model"):
             print("Falling back to original model...")
 
             # Fallback to original model
-            tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-3B-Instruct")
-            model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-3B-Instruct")
+            tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.1-8B-Instruct")
+            model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.1-8B-Instruct")
 
             if tokenizer.pad_token is None:
                 tokenizer.pad_token = tokenizer.eos_token
@@ -131,11 +131,11 @@ def create_interface():
 
 from pyngrok import ngrok
 if __name__ == "__main__":
-    ngrok.set_auth_token("2aveDiR2bbXKfz8kkHaQIzh1AvO_7kWS54CPDiG3Day3nUJR4")
+    # ngrok.set_auth_token("2aveDiR2bbXKfz8kkHaQIzh1AvO_7kWS54CPDiG3Day3nUJR4")
     print("Starting simple chat interface...")
     demo = create_interface()
-    public_url = ngrok.connect(7860)
-    print(f"Public URL: {public_url}")
+    # public_url = ngrok.connect(7860)
+    # print(f"Public URL: {public_url}")
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,

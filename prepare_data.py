@@ -22,14 +22,15 @@ def read_markdown_content(file_paths):
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
-                if content:  # Only add non-empty files
+                print(f"\nFile: {file_path}")
+                print(f"First 200 chars: {content[:200]}")  # Add this debug line
+                if content:
                     texts.append(content)
         except Exception as e:
             print(f"Error reading {file_path}: {e}")
     return texts
 
-
-def prepare_dataset(knowledge_base_path, model_name="microsoft/DialoGPT-small", max_length=512):
+def prepare_dataset(knowledge_base_path, model_name="meta-llama/Llama-3.1-8B-Instruct", max_length=512):
     """Prepare dataset for pretraining."""
     print("Collecting markdown files...")
     md_files = collect_markdown_files(knowledge_base_path)

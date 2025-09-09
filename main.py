@@ -58,10 +58,10 @@ def main():
 
     try:
         import chat
-        ngrok.set_auth_token("2aveDiR2bbXKfz8kkHaQIzh1AvO_7kWS54CPDiG3Day3nUJR4")
+        # ngrok.set_auth_token("2aveDiR2bbXKfz8kkHaQIzh1AvO_7kWS54CPDiG3Day3nUJR4")
         demo = chat.create_interface()
-        public_url = ngrok.connect(7860)
-        print(f"Public URL: {public_url}")
+        # public_url = ngrok.connect(7860)
+        # print(f"Public URL: {public_url}")
         demo.launch(server_name="0.0.0.0", server_port=7860, share=False)
     except KeyboardInterrupt:
         print("\nChat stopped by user")
