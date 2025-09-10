@@ -1,9 +1,9 @@
-
 import sys
 sys.path.append('.')
 from prepare_data import prepare_dataset
 
-dataset, tokenizer = prepare_dataset('./knowledge-base')
+# Use HuggingFace dataset instead of local knowledge-base
+dataset, tokenizer = prepare_dataset(use_huggingface=True)
 dataset.save_to_disk('./processed_dataset')
 tokenizer.save_pretrained('./tokenizer')
-print('Dataset preparation complete!')
+print('RuneScape dataset preparation complete!')

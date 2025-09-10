@@ -1,6 +1,6 @@
 import os
 import glob
-from datasets import Dataset
+from datasets import Dataset, load_dataset
 from transformers import AutoTokenizer
 
 
@@ -30,15 +30,32 @@ def read_markdown_content(file_paths):
             print(f"Error reading {file_path}: {e}")
     return texts
 
-def prepare_dataset(knowledge_base_path, model_name="meta-llama/Llama-3.1-8B-Instruct", max_length=512):
-    """Prepare dataset for pretraining."""
-    print("Collecting markdown files...")
-    md_files = collect_markdown_files(knowledge_base_path)
-    print(f"Found {len(md_files)} markdown files")
 
-    print("Reading file contents...")
-    texts = read_markdown_content(md_files)
-    print(f"Successfully read {len(texts)} files")
+def prepare_dataset(knowledge_base_path=None, model_name="meta-llama/Llama-3.1-8B-Instruct", max_length=512,
+                    use_huggingface=False):
+    """Prepare dataset for pretraining."""
+
+    if use_huggingface:
+        print("Loading RuneScape dataset from HuggingFace...")
+        # Load your HuggingFace dataset
+        hf_dataset = load_dataset("JesseGuerrero/2012-runescape-wiki")
+
+        # Extract texts from the dataset - it's a CSV with 'text' column
+        texts = [example["text"] for example in hf_dataset["train"]]
+        print(f"Loaded {len(texts)} examples from HuggingFace dataset")
+
+        # Debug: show first few examples
+        for i, text in enumerate(texts[:3]):
+            print(f"\nExample {i + 1} (first 200 chars): {text[:200]}")
+
+    else:
+        print("Collecting markdown files...")
+        md_files = collect_markdown_files(knowledge_base_path)
+        print(f"Found {len(md_files)} markdown files")
+
+        print("Reading file contents...")
+        texts = read_markdown_content(md_files)
+        print(f"Successfully read {len(texts)} files")
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -47,9 +64,17 @@ def prepare_dataset(knowledge_base_path, model_name="meta-llama/Llama-3.1-8B-Ins
 
     # Tokenize texts
     def tokenize_function(examples):
+        # Ensure all texts are strings and not None
+        valid_texts = []
+        for text in examples['text']:
+            if isinstance(text, str) and text.strip():
+                valid_texts.append(text)
+            else:
+                valid_texts.append("")  # Replace invalid with empty string
+
         # Tokenize and truncate to max_length
         tokens = tokenizer(
-            examples['text'],
+            valid_texts,
             truncation=True,
             padding=False,
             max_length=max_length,
@@ -72,9 +97,8 @@ def prepare_dataset(knowledge_base_path, model_name="meta-llama/Llama-3.1-8B-Ins
 
 
 if __name__ == "__main__":
-    # Example usage
-    knowledge_base_path = "./knowledge_base"  # Change this to your path
-    dataset, tokenizer = prepare_dataset(knowledge_base_path)
+    # Example usage - use HuggingFace dataset
+    dataset, tokenizer = prepare_dataset(use_huggingface=True)
 
     # Save dataset for later use
     dataset.save_to_disk("./processed_dataset")

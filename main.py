@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Final working pipeline - Manual training to avoid framework issues.
+Updated to use HuggingFace RuneScape dataset.
 """
 
 import os
@@ -10,33 +11,23 @@ from pyngrok import ngrok
 def main():
     print("Final LLM Knowledge Base Training")
     print("=" * 40)
-
-    # Get knowledge base path
-    if len(sys.argv) > 1:
-        kb_path = sys.argv[1]
-    else:
-        kb_path = input("Enter knowledge base folder path: ").strip()
-
-    if not os.path.exists(kb_path):
-        print(f"Error: Path '{kb_path}' not found!")
-        return
-
-    print(f"Using knowledge base: {kb_path}")
+    print("Using 2012 RuneScape Wiki dataset from HuggingFace")
 
     # Step 1: Prepare data (reuse existing if available)
     if not os.path.exists('./processed_dataset'):
-        print("\n1. Preparing data...")
+        print("\n1. Preparing RuneScape dataset...")
         try:
             from prepare_data import prepare_dataset
-            dataset, tokenizer = prepare_dataset(kb_path)
+            # Use HuggingFace dataset instead of local knowledge base
+            dataset, tokenizer = prepare_dataset(use_huggingface=True)
             dataset.save_to_disk('./processed_dataset')
             tokenizer.save_pretrained('./tokenizer')
-            print("✓ Data ready!")
+            print("✓ RuneScape data ready!")
         except Exception as e:
             print(f"✗ Data prep failed: {e}")
             return
     else:
-        print("\n1. Using existing processed dataset...")
+        print("\n1. Using existing processed RuneScape dataset...")
 
     # Step 2: Manual training (avoids Trainer framework issues)
     print("\n2. Running manual training...")
@@ -54,6 +45,7 @@ def main():
     # Step 3: Test with chat
     print("\n3. Starting chat interface...")
     print("Chat interface will open at: http://localhost:7860")
+    print("Ask questions about RuneScape 2012!")
     print("Press Ctrl+C to stop")
 
     try:
