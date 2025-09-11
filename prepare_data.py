@@ -31,7 +31,7 @@ def read_markdown_content(file_paths):
     return texts
 
 
-def prepare_dataset(knowledge_base_path=None, model_name="meta-llama/Llama-3.1-8B-Instruct", max_length=512,
+def prepare_dataset(knowledge_base_path=None, model_name="EleutherAI/pythia-6.9b", max_length=512,
                     use_huggingface=False):
     """Prepare dataset for pretraining."""
 

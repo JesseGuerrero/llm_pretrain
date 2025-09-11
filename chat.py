@@ -43,8 +43,8 @@ def load_model(model_path="./manual_model"):
             print("Falling back to original model...")
 
             # Fallback to original model
-            tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.1-8B-Instruct")
-            model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.1-8B-Instruct")
+            tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-6.9b")
+            model = AutoModelForCausalLM.from_pretrained("EleutherAI/pythia-6.9b")
 
             if tokenizer.pad_token is None:
                 tokenizer.pad_token = tokenizer.eos_token
@@ -56,7 +56,7 @@ def load_model(model_path="./manual_model"):
             return model, tokenizer, device
 
 
-def generate_response(model, tokenizer, device, prompt, max_length=100):
+def generate_response(model, tokenizer, device, prompt, max_length=1000):
     """Generate a response from the model."""
     try:
         # Encode the prompt

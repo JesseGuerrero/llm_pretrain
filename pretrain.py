@@ -20,7 +20,7 @@ def manual_training():
     print(f"Loaded {len(dataset)} examples")
 
     # Load model and tokenizer
-    model_name = "meta-llama/Llama-3.1-8B-Instruct"
+    model_name = "EleutherAI/pythia-6.9b"
     print(f"Loading {model_name}...")
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
