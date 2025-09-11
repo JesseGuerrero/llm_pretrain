@@ -39,14 +39,8 @@ def manual_training():
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-7)
 
     print("Starting training loop...")
-
-
-
-    total_loss = 0
     num_steps = 0
-
-    # Training loop
-    batch_size = 8  # Process 4 examples at once across GPUs.
+    batch_size = 4  # Process 4 examples at once across GPUs.
     print(f"Dataset length: {len(dataset)}")
     print(f"Batch size: {batch_size}")
     for epoch in range(5):
