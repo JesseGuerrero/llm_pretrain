@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Final working pipeline - Manual training to avoid framework issues.
-Updated to use The Orthodox Church markdown file.
+Updated to use all Orthodox books from knowledge-base folder.
 """
 
 import os
@@ -11,15 +11,15 @@ from pyngrok import ngrok
 def main():
     print("Final LLM Knowledge Base Training")
     print("=" * 40)
-    print("Using The Orthodox Church markdown file")
+    print("Using Orthodox books from knowledge-base folder")
 
     # Step 1: Prepare data (reuse existing if available)
     if not os.path.exists('./processed_dataset'):
-        print("\n1. Preparing Orthodox Church dataset...")
+        print("\n1. Preparing Orthodox Church dataset from knowledge-base folder...")
         try:
             from prepare_data import prepare_dataset
-            # Use single markdown file instead of HuggingFace dataset
-            dataset, tokenizer = prepare_dataset(single_file_path="./The_Orthodox_Church.md")
+            # Use knowledge-base folder instead of single file
+            dataset, tokenizer = prepare_dataset(knowledge_base_path="./knowledge-base")
             dataset.save_to_disk('./processed_dataset')
             tokenizer.save_pretrained('./tokenizer')
             print("✓ Orthodox Church data ready!")

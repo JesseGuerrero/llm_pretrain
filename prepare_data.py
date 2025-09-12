@@ -15,19 +15,36 @@ def collect_markdown_files(knowledge_base_path):
     return md_files
 
 
-def read_markdown_content(file_paths):
-    """Read content from all markdown files."""
+def read_markdown_content(file_paths, chunk_size=2048):
+    """Read content from all markdown files and chunk them."""
     texts = []
     for file_path in file_paths:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
                 print(f"\nFile: {file_path}")
-                print(f"First 200 chars: {content[:200]}")  # Add this debug line
+                print(f"Content size: {len(content)} characters")
+
                 if content:
-                    texts.append(content)
+                    # Split into chunks to avoid overwhelming the model
+                    paragraphs = content.split('\n\n')
+
+                    current_chunk = ""
+                    for paragraph in paragraphs:
+                        # If adding this paragraph would exceed chunk_size, save current chunk
+                        if len(current_chunk) + len(paragraph) > chunk_size and current_chunk:
+                            texts.append(current_chunk.strip())
+                            current_chunk = paragraph
+                        else:
+                            current_chunk += "\n\n" + paragraph if current_chunk else paragraph
+
+                    # Add the final chunk
+                    if current_chunk.strip():
+                        texts.append(current_chunk.strip())
         except Exception as e:
             print(f"Error reading {file_path}: {e}")
+
+    print(f"\nTotal chunks created: {len(texts)}")
     return texts
 
 
@@ -95,8 +112,8 @@ def prepare_dataset(knowledge_base_path=None, model_name="EleutherAI/pythia-6.9b
         print(f"Found {len(md_files)} markdown files")
 
         print("Reading file contents...")
-        texts = read_markdown_content(md_files)
-        print(f"Successfully read {len(texts)} files")
+        texts = read_markdown_content(md_files, chunk_size=2048)
+        print(f"Successfully processed {len(texts)} text chunks")
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -138,8 +155,8 @@ def prepare_dataset(knowledge_base_path=None, model_name="EleutherAI/pythia-6.9b
 
 
 if __name__ == "__main__":
-    # Example usage - use single Orthodox Church markdown file
-    dataset, tokenizer = prepare_dataset(single_file_path="./The_Orthodox_Church.md")
+    # Example usage - use knowledge-base folder
+    dataset, tokenizer = prepare_dataset(knowledge_base_path="./knowledge-base")
 
     # Save dataset for later use
     dataset.save_to_disk("./processed_dataset")

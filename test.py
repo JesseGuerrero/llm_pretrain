@@ -2,7 +2,14 @@ from bert_score import score as bert_score
 import re
 import google.generativeai as genai
 from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
+import sys
+if len(sys.argv) != 2:
+    print("Pass the model name as the argument. There should be one argument.")
+    sys.exit()
+model_name = sys.argv[1]
 
+device = "cuda:0"
 def create_system_prompt(question):
     return f"""Below is a question about Orthodox Christian theology. Provide a detailed, accurate answer in 200-250 words. Include relevant theological terms, historical context, and doctrinal distinctions.
 
@@ -12,12 +19,29 @@ Answer:"""
 
 def inference(prompt: str, model, tokenizer) -> str:
     system_prompt = create_system_prompt(prompt)
-    inputs = tokenizer(system_prompt, return_tensors="pt")
-    outputs = model.generate(**inputs, max_length=600, do_sample=True, temperature=0.7)
-    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    generated_text = response[len(system_prompt):].strip()
-    print(generated_text)
-    return generated_text
+
+    inputs = tokenizer(
+        system_prompt,
+        return_tensors="pt",
+        truncation=True,
+        max_length=512
+    ).to(device)
+
+    with torch.no_grad(), torch.cuda.amp.autocast():  # Mixed precision
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=250,
+            do_sample=True,
+            temperature=0.7,
+            top_p=0.9,
+            use_cache=True,
+            pad_token_id=tokenizer.eos_token_id
+        )
+
+    input_length = inputs['input_ids'].shape[1]
+    new_tokens = outputs[0][input_length:]
+    generated_text = tokenizer.decode(new_tokens, skip_special_tokens=True)
+    return generated_text.strip()
 
 def evaluate_orthodox_response(
     question: str,
@@ -124,14 +148,9 @@ if __name__ == "__main__":
         "Explain the distinction between God's essence and energies according to Orthodox theology.",
         "What are the Seven Ecumenical Councils and why are they significant to Orthodox Christianity?",
         "Describe the role of icons in Orthodox worship and the theological justification for their veneration.",
-        "Who was Gregory Palamas and what was his contribution to Orthodox theology?",
-        "Explain the Orthodox understanding of the filioque controversy and why it led to the Great Schism.",
+
         "What is the Jesus Prayer and how does it relate to hesychasm?",
-        "Describe the Orthodox concept of ancestral sin versus original sin in Western theology.",
         "Explain the theological significance of the Cappadocian Fathers' contributions to Trinitarian doctrine.",
-        "What is the Orthodox understanding of apophatic theology and how does it relate to the works of Pseudo-Dionysius?",
-        "Describe the theological controversy surrounding Barlaam of Calabria and the hesychasts.",
-        "Explain the Orthodox doctrine of perichoresis and its application to both Trinitarian and Christological theology."
     ]
 
     orthodox_reference_answers = [
@@ -147,57 +166,40 @@ if __name__ == "__main__":
         # Question 4: Icons and Veneration
         "Icons hold central importance in Orthodox worship as 'windows to heaven' that facilitate prayer and contemplation. The theological justification rests on the Incarnation - since God became visible in Christ, divine reality can be depicted through sacred art. Icons are not mere illustrations but sacramental presences that participate in the spiritual reality they represent. The distinction between veneration (proskynesis) and worship (latreia) is crucial - Orthodox Christians venerate icons while reserving worship for God alone. This practice was established during the iconoclastic controversies (726-843), when icon opponents argued that images violated the commandment against graven images. Orthodox theologians, particularly John of Damascus, defended icons by arguing that the prohibition applied to false gods, not to Christian images that direct attention toward divine reality. The Seventh Ecumenical Council (787) formally restored icon veneration, declaring that honor shown to icons passes to their prototypes. Icons serve multiple theological functions: they proclaim the reality of the Incarnation, provide means of communion with saints and divine realities, offer visual Scripture for the illiterate, and beautify liturgical spaces. The iconostasis (icon screen) in Orthodox churches creates a sacred threshold between the visible and invisible realms.",
 
-        # Question 5: Gregory Palamas
-        "Gregory Palamas (1296-1359) was an Athonite monk and theologian who became the primary defender of hesychasm and architect of the essence-energies distinction. His contribution centers on systematizing Orthodox mystical theology in response to Barlaam of Calabria's attacks on hesychast practices. Barlaam criticized the Jesus Prayer and hesychast claims of experiencing divine light, arguing that no creature could have direct knowledge of God. Palamas responded by developing the essence-energies distinction, arguing that while God's essence remains unknowable, His energies allow genuine divine participation. He defended the hesychast experience of the Taboric Light (the same light witnessed at Christ's Transfiguration) as authentic divine energy, not created phenomena. Palamas grounded hesychast practices in patristic tradition, demonstrating their continuity with earlier monastic spirituality. His theological synthesis preserved both divine transcendence and the possibility of genuine theosis. The Palamite councils (1341, 1347, 1351) endorsed his teaching, making the essence-energies distinction official Orthodox doctrine. Palamas was canonized in 1368, and his theology profoundly influenced subsequent Orthodox spirituality. His work distinguishes Eastern from Western Christianity, as Western scholasticism generally rejected the essence-energies distinction. Palamas successfully integrated mystical experience with systematic theology, providing intellectual foundation for Orthodox spiritual life.",
-
-        # Question 6: Filioque Controversy
-        "The filioque controversy centers on whether the Holy Spirit proceeds from the Father alone (Orthodox position) or from the Father 'and the Son' (filioque, Western position). Originally, the Niceno-Constantinopolitan Creed (381) stated the Spirit 'proceeds from the Father,' following Christ's words in John 15:26. The Western church gradually added filioque ('and the Son') to combat Arianism, first appearing in Spain (6th century) and eventually adopted by Rome (11th century). Orthodox theology objects on both theological and ecclesiological grounds. Theologically, Orthodoxy maintains that the Father is the sole source (aitia) of the Trinity's other persons, preserving monarchical order. Adding the Son as co-source allegedly compromises the Father's unique role and suggests two principles in the Trinity. The Spirit's relation to the Son is through the Father, not as independent procession. Orthodox theology distinguishes between eternal procession (from the Father alone) and temporal mission (Spirit sent by both Father and Son). Ecclesiologically, unilateral addition of filioque violated conciliar authority, as only ecumenical councils may modify credal statements. This controversy contributed significantly to the Great Schism (1054), representing deeper differences about papal authority, theological methodology, and ecclesiology. The filioque remains a major theological obstacle to Orthodox-Catholic reunion, symbolizing broader divergences in Trinitarian theology and church governance.",
-
         # Question 7: Jesus Prayer and Hesychasm
         "The Jesus Prayer ('Lord Jesus Christ, Son of God, have mercy on me, a sinner') is the central practice of hesychasm, the Orthodox mystical tradition emphasizing inner quietude and union with God. Hesychasm (from hesychia, meaning stillness or silence) developed in early monasticism, particularly through the Desert Fathers, and was systematized on Mount Athos. The Jesus Prayer coordinates breath, heart, and mind in continuous invocation of Christ's name, based on Paul's injunction to 'pray without ceasing' (1 Thessalonians 5:17) and the power attributed to Christ's name throughout Scripture. Hesychast practitioners seek to unite mind and heart through this prayer, eventually experiencing the mind's descent into the heart where prayer becomes self-actuating. Advanced practitioners report experiencing divine light (the same uncreated light of Christ's Transfiguration), which Gregory Palamas defended as authentic participation in God's energies. The prayer progresses through stages: oral recitation, mental repetition, and finally prayer of the heart where the prayer continues spontaneously. Hesychasm emphasizes somatic spirituality - involving the body in prayer through breathing techniques and specific postures. This tradition represents the practical dimension of Orthodox theology, demonstrating how doctrines like theosis and the essence-energies distinction translate into lived spiritual experience and direct communion with God.",
-
-        # Question 8: Ancestral Sin vs Original Sin
-        "Orthodox theology distinguishes between ancestral sin and the Western doctrine of original sin, reflecting different anthropological understandings. Original sin, as developed by Augustine and dominant in Western Christianity, suggests that Adam's sin corrupted human nature itself, transmitting guilt and condemnation to all descendants. Humans are born guilty and deserving punishment, requiring baptism for salvation from inherited guilt. Orthodox theology rejects inherited guilt while acknowledging sin's consequences. Ancestral sin refers to the corruption of the human condition following Adam's fall - mortality, suffering, and inclination toward sin - without transferring Adam's personal guilt. Death entered through sin (Romans 5:12), but each person bears responsibility only for their own sins, not Adam's. Orthodox anthropology maintains that humans retain the divine image despite the fall, though it may be obscured. Free will remains intact, allowing cooperation with divine grace in salvation. This perspective emphasizes sin as disease requiring healing rather than crime requiring punishment. Baptism removes the consequences of ancestral sin and mortality's power rather than inherited guilt. The Orthodox understanding supports synergy between divine grace and human response, while Western original sin often emphasizes monergistic salvation. This difference impacts views of infant baptism, salvation, and human capacity for good, reflecting broader divergences between Eastern and Western theological anthropology.",
 
         # Question 9: Cappadocian Fathers
         "The Cappadocian Fathers - Basil the Great, Gregory of Nazianzus, and Gregory of Nyssa - made foundational contributions to Trinitarian doctrine in the 4th century, establishing terminology and concepts essential to Orthodox theology. They refined understanding of divine persons (hypostases) and essence (ousia), distinguishing between what God is (one essence) and who God is (three persons). Basil the Great established the formula 'one ousia, three hypostases,' clarifying that the Trinity shares one divine nature while maintaining three distinct persons. He emphasized the Spirit's divinity against Pneumatomachi heretics. Gregory of Nazianzus, called 'the Theologian,' provided precise theological language about the Trinity's relations, emphasizing that persons are distinguished by relations (fatherhood, sonship, procession) rather than essential differences. His Five Theological Orations became standard Orthodox Trinitarian theology. Gregory of Nyssa developed the concept of eternal relations and divine infinity, arguing against Eunomian claims that the Son was created. Together, they established that divine persons share identical essence while maintaining real distinctions. Their work grounded the First Council of Constantinople (381) and shaped the Nicene Creed's expansion. The Cappadocians integrated biblical revelation with philosophical precision, creating vocabulary for expressing Trinity's mystery while avoiding both modalism and tritheism. Their influence extends beyond Trinitarian doctrine to mystical theology, ecclesiology, and Christian anthropology.",
 
-        # Question 10: Apophatic Theology
-        "Apophatic theology (negative theology) is central to Orthodox theological methodology, emphasizing what cannot be said about God rather than positive assertions. This approach recognizes divine transcendence and the limitations of human language and concepts when describing the infinite. Orthodoxy maintains that God's essence is absolutely unknowable, requiring via negativa to avoid reducing God to creaturely categories. Pseudo-Dionysius the Areopagite (5th-6th century) systematized apophatic theology in works like 'Mystical Theology,' establishing hierarchy of knowing that culminates in unknowing. He argued that the highest divine names must be denied to reach authentic divine knowledge, as God surpasses all human concepts and language. This creates dialectical tension with cataphatic (positive) theology, which affirms divine attributes revealed in Scripture and experience. Orthodox theology balances both approaches: cataphatic theology speaks truly about God's energies and activities, while apophatic theology maintains that God's essence transcends all affirmations. Pseudo-Dionysius influenced major Orthodox theologians including Maximus the Confessor, John of Damascus, and Gregory Palamas. The apophatic tradition emphasizes mystical union through unknowing, intellectual humility before divine mystery, and recognition that theological language points beyond itself. This methodology distinguishes Orthodox theology from Western scholasticism's confidence in rational demonstration and influences Orthodox liturgical language, which often proceeds through negation and paradox.",
-
-        # Question 11: Barlaam vs Hesychasts
-        "The theological controversy between Barlaam of Calabria and the hesychasts (1330s-1350s) centered on the nature of divine knowledge and mystical experience. Barlaam, a Calabrian monk and philosopher, attacked hesychast claims of experiencing divine light through the Jesus Prayer, arguing that such experiences were created phenomena, not divine reality. He maintained strict divine transcendence, asserting that no creature could have direct knowledge of God, making hesychast experiences either delusion or prideful presumption. Barlaam emphasized rational theology over mystical experience and criticized hesychast somatic practices as crude materialism. The hesychasts, led by Gregory Palamas, defended their mystical traditions as authentic divine encounter. Palamas developed the essence-energies distinction to explain how genuine divine participation was possible without compromising transcendence. He argued that hesychasts experienced the same uncreated light witnessed at Christ's Transfiguration, making their experiences authentic divine energies rather than created visions. The controversy involved deeper issues about the relationship between philosophy and theology, the role of mystical experience in Christian life, and the nature of divine revelation. Three councils in Constantinople (1341, 1347, 1351) condemned Barlaam and endorsed Palamite theology. This controversy established the essence-energies distinction as official Orthodox doctrine and validated hesychast spirituality as authentically Orthodox. The resolution demonstrated Orthodoxy's commitment to mystical experience as genuine theological source alongside Scripture and Tradition.",
-
-        # Question 12: Perichoresis
-        "Perichoresis (circumincession or mutual indwelling) is a fundamental Orthodox doctrine describing the dynamic relationship between divine persons in the Trinity and the two natures in Christ. The term, developed by the Cappadocian Fathers and refined by John of Damascus, indicates that divine persons interpenetrate while maintaining distinct identities. In Trinitarian theology, perichoresis explains how Father, Son, and Holy Spirit share one divine essence while remaining three persons - each person fully indwells the others without confusion or separation. This dynamic unity preserves both divine oneness and personal distinctions, avoiding modalism and tritheism. The Father's monarchy remains intact as source of divine processions, while perichoresis describes the eternal communion of divine life. In Christological application, perichoresis explains the relationship between Christ's divine and human natures, which interpenetrate without mixing or confusion while maintaining their respective properties. This doctrine, formulated to defend Chalcedonian Christology, explains how Christ can be simultaneously fully God and fully human in one person. Divine-human perichoresis in Christ enables human salvation through theosis, as humanity gains access to divine life through the incarnate Logos. Orthodox theology extends perichoretic principles to ecclesiology and spiritual life, understanding Christian community and mystical union as participation in divine perichoresis. This doctrine demonstrates Orthodox emphasis on dynamic relationship and communion rather than static essence, influencing understanding of Trinity, Incarnation, and salvation."
     ]
-    for model_name in ["./manual_model"]:#["EleutherAI/pythia-6.9b", "tiiuae/falcon-7b", "meta-llama/Llama-3.1-8B-Instruct"]:
-        wandb.init(project="Orthodox LLM", config={"model_name": model_name})
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForCausalLM.from_pretrained(model_name)
-        score_sum, section_sum, sections = 0, 0, ["Basic Theology", "Intermediate Theology", "Advanced Theology"]
-        section_scores = [0,0,0,0]
-        for i in tqdm(range(12), desc="Generating scores..."):
-            question = orthodox_questions[i]
-            reference = orthodox_reference_answers[i]
-            generated = inference(question, model, tokenizer)
-            score = evaluate_orthodox_response(
-                question=question,
-                generated_response=generated,
-                reference_answer=reference
-            )
-            section_sum += score
-            if (i + 1) % 4 == 0:  # Check after processing 4 questions
-                section_idx = i // 4  # 0, 1, 2 for the three sections
-                print(f"Section #{section_idx + 1} {sections[section_idx]} Score: {section_sum / 4}")
-                section_scores[section_idx] = section_sum / 4
-                section_sum = 0
-            score_sum += score
-        wandb.log({
-            "basic_theology_score": section_scores[0],
-            "intermediate_theology_score": section_scores[1],
-            "advanced_theology_score": section_scores[2],
-            "overall_orthodox_score": score_sum / 12
-        })
-        print(f"Orthodox Theology Score: {score_sum/12}/4.0")
-        wandb.finish()
+    wandb.init(project="Orthodox LLM", config={"model_name": model_name})
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
+    score_sum, section_sum, sections = 0, 0, ["Basic Theology", "Intermediate Theology"]
+    section_scores = [0,0,0,0]
+    for i in tqdm(range(6), desc="Generating scores..."):
+        question = orthodox_questions[i]
+        reference = orthodox_reference_answers[i]
+        generated = inference(question, model, tokenizer)
+        score = evaluate_orthodox_response(
+            question=question,
+            generated_response=generated,
+            reference_answer=reference
+        )
+        section_sum += score
+        if (i + 1) % 3 == 0:
+            section_idx = i // 3
+            print(f"Section #{section_idx + 1} {sections[section_idx]} Score: {section_sum / 3}")
+            section_scores[section_idx] = section_sum / 3
+            section_sum = 0
+        score_sum += score
+    wandb.log({
+        "basic_theology_score": section_scores[0],
+        "intermediate_theology_score": section_scores[1],
+        "overall_orthodox_score": score_sum / 6
+    })
+    print(f"Orthodox Theology Score: {score_sum/6}/4.0")
+    wandb.finish()
