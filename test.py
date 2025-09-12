@@ -1,13 +1,23 @@
-from bert_score import score
+from bert_score import score as bert_score
 import re
 import google.generativeai as genai
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
+def create_system_prompt(question):
+    return f"""Below is a question about Orthodox Christian theology. Provide a detailed, accurate answer in 200-250 words. Include relevant theological terms, historical context, and doctrinal distinctions.
+
+Question: {question}
+
+Answer:"""
+
 def inference(prompt: str, model, tokenizer) -> str:
-    inputs = tokenizer(prompt, return_tensors="pt")
-    outputs = model.generate(**inputs, max_length=350, do_sample=True, temperature=0.7)
+    system_prompt = create_system_prompt(prompt)
+    inputs = tokenizer(system_prompt, return_tensors="pt")
+    outputs = model.generate(**inputs, max_length=600, do_sample=True, temperature=0.7)
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return response
+    generated_text = response[len(system_prompt):].strip()
+    print(generated_text)
+    return generated_text
 
 def evaluate_orthodox_response(
     question: str,
@@ -16,16 +26,29 @@ def evaluate_orthodox_response(
 ) -> float:
     # 1. KEYWORD PRESENCE SCORE (20% weight)
     orthodox_keywords = [
-        'theosis', 'deification', 'essence', 'energies', 'palamite',
-        'hesychasm', 'jesus prayer', 'iconoclasm', 'iconoclastic',
+        # BASIC THEOLOGY KEYWORDS
+        'god', 'christ', 'jesus', 'holy spirit', 'trinity', 'father', 'son',
+        'incarnation', 'crucifixion', 'resurrection', 'salvation', 'grace',
+        'church', 'scripture', 'tradition', 'sacrament', 'baptism', 'communion',
+        'liturgy', 'prayer', 'faith', 'sin', 'redemption', 'eternal life',
+        'mary', 'theotokos', 'mother of god', 'saints', 'angels',
+
+        # INTERMEDIATE KEYWORDS
         'ecumenical council', 'nicaea', 'constantinople', 'ephesus', 'chalcedon',
-        'filioque', 'pneumatomachi', 'monophysite', 'nestorianism',
-        'trinity', 'incarnation', 'hypostasis', 'ousia', 'persona',
+        'creed', 'nicene', 'orthodox', 'catholic', 'apostolic', 'one holy',
+        'divine nature', 'human nature', 'two natures', 'hypostasis', 'person',
+        'essence', 'substance', 'consubstantial', 'homoousios',
+        'icon', 'veneration', 'worship', 'image', 'prototype',
+        'patristic', 'church fathers', 'tradition', 'apostolic succession',
+
+        # ADVANCED KEYWORDS (your current list)
+        'theosis', 'deification', 'energies', 'palamite', 'hesychasm',
+        'jesus prayer', 'iconoclasm', 'filioque', 'pneumatomachi',
+        'monophysite', 'nestorianism', 'ousia', 'persona',
         'apophatic', 'cataphatic', 'mystical theology', 'divine liturgy',
-        'iconostasis', 'veneration', 'worship', 'proskynesis',
-        'patristic', 'cappadocian fathers', 'john chrysostom',
-        'basil the great', 'gregory nazianzus', 'gregory palamas',
-        'maximus confessor', 'john damascene', 'athanasius'
+        'iconostasis', 'proskynesis', 'cappadocian fathers',
+        'john chrysostom', 'basil the great', 'gregory nazianzus',
+        'gregory palamas', 'maximus confessor', 'john damascene', 'athanasius'
     ]
 
     # Count keyword matches (case insensitive)
@@ -33,16 +56,19 @@ def evaluate_orthodox_response(
     matched_keywords = sum(1 for keyword in orthodox_keywords if keyword in response_lower)
 
     # Score based on keyword density (max 4.0)
-    keyword_score = min(4.0, (matched_keywords / len(orthodox_keywords)) * 20)
+    keyword_score = min(4.0, (matched_keywords / 20) * 4.0)
+    print(f"Keywords found: {matched_keywords}, Score: {keyword_score}")
 
     # 2. SEMANTIC SIMILARITY SCORE (40% weight)
     try:
         # Calculate BERTScore between generated response and reference
-        P, R, F1 = score([generated_response], [reference_answer], lang='en', verbose=False)
+        P, R, F1 = bert_score([generated_response], [reference_answer], lang='en', verbose=False)
         # Use F1 score, scale from 0-1 to 0-4
         semantic_score = float(F1[0]) * 4.0
-    except:
+        print(f"BERTScore F1: {F1[0]}, Bert Score: {semantic_score}")
+    except Exception as e:
         # Fallback if BERTScore fails
+        print(f"BERTScore failed: {e}")
         semantic_score = 0.0
 
     # 3. LLM EVALUATION SCORE (40% weight)
@@ -60,7 +86,7 @@ Score the generated response from 0-4 based on:
 - Relevance to the specific question asked
 - Coherence and clarity
 
-Respond with only a single number from 0-4 (decimals allowed like 2.5).
+Respond with only a single number from 0.0-4.0 with decimals allowed like 2.5 up to one decimal place.
 """
 
     try:
@@ -68,13 +94,15 @@ Respond with only a single number from 0-4 (decimals allowed like 2.5).
         model = genai.GenerativeModel("gemini-2.5-pro")
         response = model.generate_content(llm_prompt)
         llm_response = response.text.strip()
+        print("Gemini Response", llm_response)
 
         # Extract numerical score from response
         llm_score = float(re.findall(r'\d+\.?\d*', llm_response)[0])
         llm_score = max(0.0, min(4.0, llm_score))  # Clamp to 0-4 range
 
-    except:
+    except Exception as e:
         # Fallback if LLM evaluation fails
+        print(f"error with gemini: {e}")
         llm_score = 0.0
 
     # 4. CALCULATE WEIGHTED FINAL SCORE
@@ -143,7 +171,7 @@ if __name__ == "__main__":
         # Question 12: Perichoresis
         "Perichoresis (circumincession or mutual indwelling) is a fundamental Orthodox doctrine describing the dynamic relationship between divine persons in the Trinity and the two natures in Christ. The term, developed by the Cappadocian Fathers and refined by John of Damascus, indicates that divine persons interpenetrate while maintaining distinct identities. In Trinitarian theology, perichoresis explains how Father, Son, and Holy Spirit share one divine essence while remaining three persons - each person fully indwells the others without confusion or separation. This dynamic unity preserves both divine oneness and personal distinctions, avoiding modalism and tritheism. The Father's monarchy remains intact as source of divine processions, while perichoresis describes the eternal communion of divine life. In Christological application, perichoresis explains the relationship between Christ's divine and human natures, which interpenetrate without mixing or confusion while maintaining their respective properties. This doctrine, formulated to defend Chalcedonian Christology, explains how Christ can be simultaneously fully God and fully human in one person. Divine-human perichoresis in Christ enables human salvation through theosis, as humanity gains access to divine life through the incarnate Logos. Orthodox theology extends perichoretic principles to ecclesiology and spiritual life, understanding Christian community and mystical union as participation in divine perichoresis. This doctrine demonstrates Orthodox emphasis on dynamic relationship and communion rather than static essence, influencing understanding of Trinity, Incarnation, and salvation."
     ]
-    for model_name in ["EleutherAI/pythia-6.9b", "tiiuae/falcon-7b", "meta-llama/Llama-3.1-8B-Instruct"]:
+    for model_name in ["./manual_model"]:#["EleutherAI/pythia-6.9b", "tiiuae/falcon-7b", "meta-llama/Llama-3.1-8B-Instruct"]:
         wandb.init(project="Orthodox LLM", config={"model_name": model_name})
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         model = AutoModelForCausalLM.from_pretrained(model_name)
@@ -159,9 +187,10 @@ if __name__ == "__main__":
                 reference_answer=reference
             )
             section_sum += score
-            if i > 0 and i % 4 == 0:
-                print(f"Section #{i / 4} {sections[int(i / 4)]} Score: {section_sum / 4}")
-                section_scores[int(i / 4)] = section_sum / 4
+            if (i + 1) % 4 == 0:  # Check after processing 4 questions
+                section_idx = i // 4  # 0, 1, 2 for the three sections
+                print(f"Section #{section_idx + 1} {sections[section_idx]} Score: {section_sum / 4}")
+                section_scores[section_idx] = section_sum / 4
                 section_sum = 0
             score_sum += score
         wandb.log({

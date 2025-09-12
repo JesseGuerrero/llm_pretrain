@@ -43,7 +43,7 @@ def manual_training():
     batch_size = 4  # Process 4 examples at once across GPUs.
     print(f"Dataset length: {len(dataset)}")
     print(f"Batch size: {batch_size}")
-    for epoch in range(5):
+    for epoch in range(3):
         for i in range(0, len(dataset), batch_size):
             print(f"Processing batch starting at index {i}/{len(dataset)} for epoch {epoch}")
             batch_examples = [dataset[j] for j in range(i, min(i + batch_size, len(dataset)))]

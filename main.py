@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Final working pipeline - Manual training to avoid framework issues.
-Updated to use HuggingFace RuneScape dataset.
+Updated to use The Orthodox Church markdown file.
 """
 
 import os
@@ -11,23 +11,23 @@ from pyngrok import ngrok
 def main():
     print("Final LLM Knowledge Base Training")
     print("=" * 40)
-    print("Using 2012 RuneScape Wiki dataset from HuggingFace")
+    print("Using The Orthodox Church markdown file")
 
     # Step 1: Prepare data (reuse existing if available)
     if not os.path.exists('./processed_dataset'):
-        print("\n1. Preparing RuneScape dataset...")
+        print("\n1. Preparing Orthodox Church dataset...")
         try:
             from prepare_data import prepare_dataset
-            # Use HuggingFace dataset instead of local knowledge base
-            dataset, tokenizer = prepare_dataset(use_huggingface=True)
+            # Use single markdown file instead of HuggingFace dataset
+            dataset, tokenizer = prepare_dataset(single_file_path="./The_Orthodox_Church.md")
             dataset.save_to_disk('./processed_dataset')
             tokenizer.save_pretrained('./tokenizer')
-            print("✓ RuneScape data ready!")
+            print("✓ Orthodox Church data ready!")
         except Exception as e:
             print(f"✗ Data prep failed: {e}")
             return
     else:
-        print("\n1. Using existing processed RuneScape dataset...")
+        print("\n1. Using existing processed Orthodox Church dataset...")
 
     # Step 2: Manual training (avoids Trainer framework issues)
     print("\n2. Running manual training...")
@@ -45,7 +45,7 @@ def main():
     # Step 3: Test with chat
     print("\n3. Starting chat interface...")
     print("Chat interface will open at: http://localhost:7860")
-    print("Ask questions about RuneScape 2012!")
+    print("Ask questions about Orthodox Christianity!")
     print("Press Ctrl+C to stop")
 
     try:

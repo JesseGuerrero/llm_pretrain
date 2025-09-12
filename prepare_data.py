@@ -31,11 +31,52 @@ def read_markdown_content(file_paths):
     return texts
 
 
+def read_single_markdown_file(file_path, chunk_size=2048):
+    """Read a single large markdown file and split into chunks."""
+    texts = []
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+            print(f"\nReading file: {file_path}")
+            print(f"Total file size: {len(content)} characters")
+
+            if content:
+                # Split into chunks to avoid overwhelming the model
+                # Split by double newlines first (paragraphs), then by size if needed
+                paragraphs = content.split('\n\n')
+
+                current_chunk = ""
+                for paragraph in paragraphs:
+                    # If adding this paragraph would exceed chunk_size, save current chunk
+                    if len(current_chunk) + len(paragraph) > chunk_size and current_chunk:
+                        texts.append(current_chunk.strip())
+                        current_chunk = paragraph
+                    else:
+                        current_chunk += "\n\n" + paragraph if current_chunk else paragraph
+
+                # Add the final chunk
+                if current_chunk.strip():
+                    texts.append(current_chunk.strip())
+
+                print(f"Split into {len(texts)} chunks")
+                print(f"First chunk preview (200 chars): {texts[0][:200]}")
+
+    except Exception as e:
+        print(f"Error reading {file_path}: {e}")
+
+    return texts
+
+
 def prepare_dataset(knowledge_base_path=None, model_name="EleutherAI/pythia-6.9b", max_length=512,
-                    use_huggingface=False):
+                    use_huggingface=False, single_file_path=None):
     """Prepare dataset for pretraining."""
 
-    if use_huggingface:
+    if single_file_path:
+        print(f"Loading single markdown file: {single_file_path}")
+        texts = read_single_markdown_file(single_file_path, chunk_size=2048)
+        print(f"Loaded {len(texts)} text chunks from single file")
+
+    elif use_huggingface:
         print("Loading RuneScape dataset from HuggingFace...")
         # Load your HuggingFace dataset
         hf_dataset = load_dataset("JesseGuerrero/2012-runescape-wiki")
@@ -97,8 +138,8 @@ def prepare_dataset(knowledge_base_path=None, model_name="EleutherAI/pythia-6.9b
 
 
 if __name__ == "__main__":
-    # Example usage - use HuggingFace dataset
-    dataset, tokenizer = prepare_dataset(use_huggingface=True)
+    # Example usage - use single Orthodox Church markdown file
+    dataset, tokenizer = prepare_dataset(single_file_path="./The_Orthodox_Church.md")
 
     # Save dataset for later use
     dataset.save_to_disk("./processed_dataset")
